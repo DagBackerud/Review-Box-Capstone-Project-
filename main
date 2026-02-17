@@ -1,0 +1,295 @@
+
+// libraries used for the display
+#include <SPI.h>
+#include "Adafruit_GFX.h"
+#include "Adafruit_HX8357.h"
+// libraries used for wifi
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <time.h>
+#include <esp_eap_client.h>
+#include <ArduinoJson.h>
+#include "U8g2_for_Adafruit_GFX.h"
+#include <Fonts/FreeSerifBold9pt7b.h>
+
+
+//#define WIFI_SSID "D410"
+//#define WIFI_PASS "Axel2018"
+#include "AdafruitIO_WiFi.h"
+
+
+// Define ALL pins, including the SPI bus pins (SCK, MOSI, MISO)
+#define TFT_CS SS  // pin 6
+#define TFT_DC 3
+#define TFT_RST -1
+#define TFT_MOSI MOSI  // pin 8
+#define TFT_SCK SCK    //pin 10
+#define TFT_MISO -1    // Custom pin (MISO is often -1 or not used for displays)
+
+
+// The library will use these specific pins
+Adafruit_HX8357 tft(TFT_CS, TFT_DC, TFT_RST);
+
+
+U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
+
+int buttons[5] = { 0, 1, 26, 7, 25 };
+int votes[5] = { 0, 0, 0, 0, 0 };
+const char* voteLabels[5] = { "LOVE", "LIKE", "NEUTRAL", "DISLIKE", "HATE" };
+char dagens[128] = "laddar...";
+
+// Sensitive credentials moved to a separate header
+#include "credentials.h"
+
+
+
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("3.5\" HX8357D FeatherWing Test!");
+  pinMode(TFT_CS, OUTPUT);
+  pinMode(TFT_DC, OUTPUT);
+  pinMode(TFT_SCK, OUTPUT);
+  pinMode(TFT_MOSI, OUTPUT);
+
+  for (int i = 0; i < 5; i++) {  // sets the LEDpins to give an output
+    pinMode(buttons[i], INPUT);
+  }
+
+
+  // Setup WiFi connection
+  // Enable wifi station mode (we are a client looking to connect to an access point)
+  WiFi.enableSTA(true);
+
+  // Set the wpa2 enterprise credentials to use.
+  esp_eap_client_set_username((uint8_t*)WIFI_USERNAME, strlen(WIFI_USERNAME));
+  esp_eap_client_set_password((uint8_t*)WIFI_PASSWORD, strlen(WIFI_PASSWORD));
+
+  // Tell esp to use wpa2 enterprise to authenticate the next connection.
+  esp_wifi_sta_enterprise_enable();
+
+  WiFi.begin(WIFI_SSID, nullptr);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+
+
+  // Initialize system time using an NTP server via configTime
+  const char* ntpServer = "pool.ntp.org";
+  const long gmtOffset_sec = 7200;  // UTC+2
+  const int daylightOffset_sec = 0;
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  // Wait briefly for time to be set
+  Serial.println("Waiting for time sync...");
+  for (int i = 0; i < 10 && time(nullptr) < 1600000000; ++i) {
+    delay(500);
+    Serial.print('.');
+  }
+  Serial.println();
+
+  // One-time GET to populate dagens and initial votes
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+    if (httpCode > 0) {
+      String payload = http.getString();
+      StaticJsonDocument<1024> doc;
+      DeserializationError error = deserializeJson(doc, payload);
+      if (!error) {
+        JsonArray data = doc["data"];
+        // data[0] -> dagens
+        const char* d = data[0];
+        strncpy(dagens, d, sizeof(dagens)-1);
+        // data[2..6] -> votes[0..4]
+        for (int vi = 0; vi < 5; ++vi) {
+          votes[vi] = data[vi+2].as<int>();
+        }
+        Serial.print("Initial dagens: ");
+        Serial.println(dagens);
+      } else {
+        Serial.print("JSON Parse failed in setup: ");
+        Serial.println(error.f_str());
+      }
+    } else {
+      Serial.printf("Initial HTTP Error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+  }
+
+  tft.begin();
+   delay(200);
+   tft.fillScreen(HX8357_BLACK);
+   tft.setRotation(3);
+
+  u8g2_for_adafruit_gfx.begin(tft);                 // connect u8g2 procedures to Adafruit GFX
+
+
+delay(1000);
+   u8g2_for_adafruit_gfx.setFontMode(0);                 // use u8g2 none transparent mode
+   u8g2_for_adafruit_gfx.setFontDirection(0);            // left to right (this is default)
+   u8g2_for_adafruit_gfx.setForegroundColor(HX8357_GREEN);      // apply Adafruit GFX color
+   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR14_tf);  // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+    u8g2_for_adafruit_gfx.setCursor(0,20);                // start writing at this position
+    u8g2_for_adafruit_gfx.print("Hello World");
+   u8g2_for_adafruit_gfx.setCursor(0,40);                // start writing at this position
+    u8g2_for_adafruit_gfx.print("Umlaut ÄÖÜ");            // UTF-8 string with german umlaut chars
+}
+void loop() {
+  // read buttons
+  for (int i = 0; i < 5; i++) {
+    if (digitalRead(buttons[i]) == 0) {
+      votes[i]++;
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(votes[i]);
+      thankYouScreen();
+      
+
+      // Build date string YYYY-MM-DD using system time
+      time_t now;
+      struct tm timeinfo;
+      char dateBuf[32] = { 0 };
+      time(&now);
+      localtime_r(&now, &timeinfo);
+      snprintf(dateBuf, sizeof(dateBuf), "%04d-%02d-%02d", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+
+      // Send single-vote POST to server
+      if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(serverName);
+        http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);  // use enum value 2
+        http.addHeader("Content-Type", "application/json");
+        String jsonData = String("{\"timestamp\":\"") + String(dateBuf) + String("\",\"vote\":\"") + String(voteLabels[i]) + String("\"}");
+        Serial.println(jsonData);
+        int httpResponseCode = http.POST(jsonData);
+        Serial.println(http.GET());
+        if (httpResponseCode > 0) {
+          String response = http.getString();
+          Serial.println(httpResponseCode);
+          Serial.println(response);
+        } else {
+          Serial.println("Error on sending POST: " + String(httpResponseCode));
+        }
+      http.end();
+      } else {
+        Serial.println("WiFi Disconnected - vote not sent");
+      }
+     welcomeScreen(dagens);
+    }
+
+    }
+  }
+
+}
+
+
+
+void displayData() {
+  tft.fillScreen(HX8357_BLACK);
+  tft.setCursor(0, 0);
+  tft.setTextColor(HX8357_WHITE);
+  tft.setTextSize(4);
+  tft.println("Vad andra tyckt:");
+  tft.print("Starkt Positiv: ");
+  tft.println(votes[0]);
+  tft.print("Positiv: ");
+  tft.println(votes[1]);
+  tft.print("Neutral: ");
+  tft.println(votes[2]);
+  tft.print("Negativ: ");
+  tft.println(votes[3]);
+  tft.print("Starkt negativ: ");
+  tft.println(votes[4]);
+  delay(5000);
+}
+void handleMessage(AdafruitIO_Data* data) {
+
+  Serial.print(data->toPinLevel());
+}
+
+
+
+void thankYouScreen(){
+  tft.fillScreen(HX8357_BLACK);
+  tft.fillRoundRect( 20,  20 ,  440,  280,  20,  tft.color565(100, 0 , 100));
+  tft.fillCircle(240,240, 50, HX8357_YELLOW);
+  tft.drawCircle(240, 2401, 50, HX8357_BLACK);
+  u8g2_for_adafruit_gfx.setBackgroundColor(tft.color565(100, 0 , 100));
+  u8g2_for_adafruit_gfx.setCursor(100, 100);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);  
+  u8g2_for_adafruit_gfx.print("Tack för att du röstat!");
+  u8g2_for_adafruit_gfx.setCursor(50, 150);
+  u8g2_for_adafruit_gfx.print("Klicka på en knapp nedan");
+  u8g2_for_adafruit_gfx.setCursor(50, 175);
+  u8g2_for_adafruit_gfx.print("om du vill se vad andra tyckt");
+
+  // Blocking wait for a button press (with timeout). This allows immediate response to a press
+  // while the thank-you screen is visible and ensures background tasks pause until the user
+  // interacts.
+  unsigned long start = millis();
+  const unsigned long timeout = 5000; // ms
+  while (millis() - start < timeout) {
+    for (int i = 0; i < 5; i++) {
+      if (digitalRead(buttons[i]) == 0) {
+        // simple debounce
+        delay(50);
+        if (digitalRead(buttons[i]) == 0) {
+          // wait for release
+          while (digitalRead(buttons[i]) == 0) delay(10);
+          // show aggregated data screen
+          displayData();
+          return;
+        }
+      }
+    }
+    delay(50);
+  }
+}
+
+void welcomeScreen( const char* food){
+  tft.fillScreen(HX8357_BLACK);
+  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_BLUE);      // apply Adafruit GFX color
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb35_tf);  // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+  u8g2_for_adafruit_gfx.setCursor(100, 70);
+  u8g2_for_adafruit_gfx.print("Välkommen!");
+  u8g2_for_adafruit_gfx.setCursor(50, 120);
+  u8g2_for_adafruit_gfx.print("Dagens lunch är:");
+
+  // Split input at first comma into two parts. If no comma, display the whole string on one line.
+  const char* comma = strchr(food, ',');
+  char part1[128] = {0};
+  char part2[128] = {0};
+  if (comma) {
+    size_t len1 = comma - food;
+    if (len1 >= sizeof(part1)) len1 = sizeof(part1) - 1;
+    memcpy(part1, food, len1);
+    part1[len1] = '\0';
+    // skip comma and following whitespace
+    const char* p = comma + 1;
+    while (*p == ' ' || *p == '\t') p++;
+    strncpy(part2, p, sizeof(part2) - 1);
+    part2[sizeof(part2) - 1] = '\0';
+  } else {
+    // No comma — show whole string in part1
+    strncpy(part1, food, sizeof(part1) - 1);
+    part1[sizeof(part1) - 1] = '\0';
+  }
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);
+  // Draw first part
+  u8g2_for_adafruit_gfx.setCursor(0, 190);
+  u8g2_for_adafruit_gfx.print(part1);
+  // Draw second part if present
+  if (part2[0] != '\0') {
+    u8g2_for_adafruit_gfx.setCursor(0, 230);
+    u8g2_for_adafruit_gfx.print(part2);
+  }
+
+}
+
+

@@ -1,0 +1,64 @@
+# === CREDENTIALS (CRITICAL - DO NOT COMMIT) ===
+credentials.h
+
+# === C++ Build Artifacts ===
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exe
+*.out
+*.elf
+*.hex
+*.bin
+*.map
+*.d
+
+# === Build Directories ===
+build/
+dist/
+.build/
+.pio/
+.pioenvs/
+cmake-build-*/
+
+# === IDE and Editor Files ===
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# === Arduino/PlatformIO Specific ===
+.pio/
+.pioenvs/
+*.pioenvs
+__pycache__/
+
+# === OS-Specific Files ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# === Compiled Python ===
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.Python
+
+# === Misc ===
+*.log
+.env
+.env.local
