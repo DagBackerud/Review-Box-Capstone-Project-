@@ -62,3 +62,11 @@ __pycache__/
 *.log
 .env
 .env.local
+# Executables
+*.exe
+*.out
+*.app
+
+# debug information files
+*.dwo
+>>>>>>> 2439abecb125fae180c7f68b50613480995a7693
