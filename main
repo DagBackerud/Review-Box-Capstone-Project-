@@ -12,10 +12,6 @@
 #include "U8g2_for_Adafruit_GFX.h"
 #include "AdafruitIO_WiFi.h"
 
-
-
-
-// Define ALL pins, including the SPI bus pins (SCK, MOSI, MISO)
 #define TFT_CS SS  // pin 6
 #define TFT_DC 3
 #define TFT_RST -1
@@ -41,9 +37,6 @@ unsigned long lastDataUpdateTime = 0;
 
 
 #include "credentials.h"
-
-
-
 
 void setup() {
   Serial.begin(115200);
@@ -178,16 +171,13 @@ void checkAndRunDailyUpdate() {
       lastDataUpdateTime = now;
     }
   }
+    delay(10000);
 }
 
 
 
 
- 
 
-
-  delay(10000);
-}
 
 
 void startUpScreen(){
@@ -320,4 +310,38 @@ void getData (){
   }
 
 }
+
+void displayData() {
+ tft.fillScreen(HX8357_BLACK);
+ tft.setCursor(0, 0);
+ u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_BLACK);
+ u8g2_for_adafruit_gfx.setForegroundColor(HX8357_WHITE);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_crox3cb_tf);
+ for (int i = 1; i < 7; i++) {
+   tft.drawFastHLine(0, i * 50 - 10 , 480, HX8357_WHITE);
+   u8g2_for_adafruit_gfx.setCursor(5, i*50 - 15);
+   u8g2_for_adafruit_gfx.print(300 - i*50);
+ }
+ for (int i = 0; i < 5; i++){
+   if(i == 1){
+   u8g2_for_adafruit_gfx.setCursor(i*90 + 30, 310);
+   u8g2_for_adafruit_gfx.print(voteLabels[i]);
+   tft.fillRect(i*90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
+   tft.drawRect(i*90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);
+   }
+   else if(i == 3){
+   u8g2_for_adafruit_gfx.setCursor(i*90 + 70, 310);
+   u8g2_for_adafruit_gfx.print(voteLabels[i]);
+   tft.fillRect(i*90 + 80, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
+   tft.drawRect(i*90 + 80, 291 - votes[i], 30, votes[i], HX8357_WHITE);
+   }
+   else{
+   u8g2_for_adafruit_gfx.setCursor(i*90 + 50 , 310);
+   u8g2_for_adafruit_gfx.print(voteLabels[i]);
+   tft.fillRect(i*90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
+   tft.drawRect(i*90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);   
+   }
+ }
+}
+
 
