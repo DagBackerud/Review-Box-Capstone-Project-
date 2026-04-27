@@ -3,13 +3,14 @@
 #include <SPI.h>
 #include "Adafruit_GFX.h"
 #include "Adafruit_HX8357.h"
+#include <QRCodeGFX.h>  // QR-code generating library
+#include "U8g2_for_Adafruit_GFX.h"
 // libraries used for wifi
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <time.h>
 #include <esp_eap_client.h>
 #include <ArduinoJson.h>
-#include "U8g2_for_Adafruit_GFX.h"
 #include "AdafruitIO_WiFi.h"
 
 #define TFT_CS SS  // pin 6
@@ -20,18 +21,23 @@
 #define TFT_MISO -1    // Custom pin (MISO is often -1 or not used for displays)
 
 
-Adafruit_HX8357 tft(TFT_CS, TFT_DC, TFT_RST); // for drawing shapes and other graphics
-U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx; // used to draw text
+Adafruit_HX8357 tft(TFT_CS, TFT_DC, TFT_RST);  // for drawing shapes and other graphics
+U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;   // used to draw text
+QRCodeGFX qrcode(tft);                         // Initialize QR-code functionallity
 
-int buttonPins[5] = { 25, 7, 26, 1, 0 }; // the pins used for the buttons
-int votes[5] = { 0, 0, 0, 0, 0 }; 
-const char* voteLabels[5] = { "HATE", "DISLIKE", "NEUTRAL", "LIKE", "LOVE" }; // labels used to assign a name to each vote cast
-char dagens[128] = "laddar..."; // stores the food of the day
+int buttonPins[5] = { 25, 7, 26, 1, 0 };  // the pins used for the buttons
+int votes[5] = { 0, 0, 0, 0, 0 };
+const char* voteLabels[5] = { "HATE", "DISLIKE", "NEUTRAL", "LIKE", "LOVE" };  // labels used to assign a name to each vote cast
+char dagens[128] = "laddar...";                                                // stores the food of the day
 
+// --- Batch posting state ---
+int batchVotes[5] = { 0, 0, 0, 0, 0 };  // counts per label inside current batch
+int batchCount = 0;                     // total votes accumulated in current batch (max 10)
+void sendBatchPost();
 // === Daily getData scheduler ===
 // Set the time (24-hour format) when getData() should run each day
-#define DAILY_UPDATE_HOUR 6    // Hour (0-23)
-#define DAILY_UPDATE_MIN 0     // Minute (0-59)
+#define DAILY_UPDATE_HOUR 6  // Hour (0-23)
+#define DAILY_UPDATE_MIN 0   // Minute (0-59)
 // Track when getData was last ran to avoid running multiple times per day
 unsigned long lastDataUpdateTime = 0;
 
@@ -48,17 +54,16 @@ void setup() {
   for (int i = 0; i < 5; i++) {  // sets the LEDpins to give an output
     pinMode(buttonPins[i], INPUT);
   }
-
+  // Display initialization
   tft.begin();
-   delay(200);
-   tft.setRotation(3);
-   tft.setTextSize(2);
+  delay(200);
+  tft.setRotation(3);
+  tft.setTextSize(2);
 
-  u8g2_for_adafruit_gfx.begin(tft);                 // connect u8g2 procedures to Adafruit GFX
+  u8g2_for_adafruit_gfx.begin(tft);  // connect u8g2 procedures to Adafruit GFX
   startUpScreen();
   delay(5000);
   tft.fillScreen(HX8357_BLACK);
-
 
   // Setup WiFi connection
   // Enable wifi station mode (we are a client looking to connect to an access point)
@@ -97,12 +102,11 @@ void setup() {
     Serial.print('.');
     tft.print(".");
   }
-tft.print("Time synced");
-
+  tft.print("Time synced");
 
   // One-time GET to populate dagens and initial votes
   getData();
-  lastDataUpdateTime = time(nullptr); // Record the initial update time
+  lastDataUpdateTime = time(nullptr);  // Record the initial update time
 }
 
 
@@ -118,42 +122,19 @@ void loop() {
       Serial.print(": ");
       Serial.println(votes[i]);
       thankYouScreen();
-      
 
-      // Build date string YYYY-MM-DD using system time
-      time_t now;
-      struct tm timeinfo;
-      char dateBuf[32] = { 0 };
-      time(&now);
-      localtime_r(&now, &timeinfo);
-      snprintf(dateBuf, sizeof(dateBuf), "%04d-%02d-%02d", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
-
-      // Send single-vote POST to server
-      if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        http.begin(serverName);
-        http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);  // use enum value 2
-        http.addHeader("Content-Type", "application/json");
-        String jsonData = String("{\"timestamp\":\"") + String(dateBuf) + String("\",\"vote\":\"") + String(voteLabels[i]) + String("\"}");
-        Serial.println(jsonData);
-        int httpResponseCode = http.POST(jsonData);
-        Serial.println(http.GET());
-        if (httpResponseCode > 0) {
-          String response = http.getString();
-          Serial.println(httpResponseCode);
-          Serial.println(response);
-        } else {
-          Serial.println("Error on sending POST: " + String(httpResponseCode));
-        }
-      http.end();
-      } else {
-        Serial.println("WiFi Disconnected - vote not sent");
+      // Accumulate vote into batch; when batchCount reaches 10 send batch POST
+      batchVotes[i]++;
+      batchCount++;
+      Serial.print("Batch count: ");
+      Serial.println(batchCount);
+      if (batchCount >= 5) {
+        sendBatchPost();
       }
-     welcomeScreen(dagens);
-    }
-
+      welcomeScreen(dagens);
     }
   }
+}
 
 // === Daily scheduler helper ===
 void checkAndRunDailyUpdate() {
@@ -165,43 +146,35 @@ void checkAndRunDailyUpdate() {
   if (timeinfo->tm_hour == DAILY_UPDATE_HOUR && timeinfo->tm_min == DAILY_UPDATE_MIN) {
     // Check if we haven't already run getData today
     // (lastDataUpdateTime will be earlier in the day)
-    if (now - lastDataUpdateTime > 3600) { // More than 1 hour since last run
+    if (now - lastDataUpdateTime > 3600) {  // More than 1 hour since last run
       Serial.println("Running scheduled daily getData...");
       getData();
       lastDataUpdateTime = now;
     }
   }
-    delay(10000);
 }
 
-
-
-
-
-
-
-void startUpScreen(){
+void startUpScreen() {
   tft.fillScreen(HX8357_WHITE);
-  u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_WHITE); 
-  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_RED);      // apply Adafruit GFX color
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb35_tf);  // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+  u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_WHITE);
+  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_RED);  // apply Adafruit GFX color
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb35_tf);     // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
   u8g2_for_adafruit_gfx.setCursor(80, 70);
-  u8g2_for_adafruit_gfx.print("Välkommen till");
-  u8g2_for_adafruit_gfx.setCursor(80, 120);
-  u8g2_for_adafruit_gfx.print("Dag & Simbas");
-  u8g2_for_adafruit_gfx.setCursor(80, 150);
-  u8g2_for_adafruit_gfx.print("Review-Box");
-  
+  u8g2_for_adafruit_gfx.print("Lunch-o-Meter");
+  u8g2_for_adafruit_gfx.setCursor(80, 130);
+  u8g2_for_adafruit_gfx.print("Dags & Simbas");
+  u8g2_for_adafruit_gfx.setCursor(80, 190);
+  u8g2_for_adafruit_gfx.print("Gymnasiearbete");
+    u8g2_for_adafruit_gfx.setCursor(80, 250);
+  u8g2_for_adafruit_gfx.print("TE23TE");
 }
 
-void thankYouScreen(){
+void thankYouScreen() {
   tft.fillScreen(HX8357_BLACK);
-  tft.fillRoundRect( 20,  20 ,  440,  280,  20,  tft.color565(100, 0 , 100));
-  tft.fillCircle(240,240, 50, HX8357_YELLOW);
-  tft.drawCircle(240, 2401, 50, HX8357_BLACK);
-  u8g2_for_adafruit_gfx.setBackgroundColor(tft.color565(100, 0 , 100));
+  tft.fillRoundRect(20, 20, 440, 280, 20, tft.color565(100, 0, 100));
+  u8g2_for_adafruit_gfx.setBackgroundColor(tft.color565(100, 0, 100));
   u8g2_for_adafruit_gfx.setCursor(100, 100);
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);  
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);
   u8g2_for_adafruit_gfx.print("Tack för att du röstat!");
   u8g2_for_adafruit_gfx.setCursor(50, 150);
   u8g2_for_adafruit_gfx.print("Klicka på en knapp nedan");
@@ -212,7 +185,7 @@ void thankYouScreen(){
   // while the thank-you screen is visible and ensures background tasks pause until the user
   // interacts.
   unsigned long start = millis();
-  const unsigned long timeout = 3000; // ms
+  const unsigned long timeout = 3000;  // ms
   while (millis() - start < timeout) {
     for (int i = 0; i < 5; i++) {
       if (digitalRead(buttonPins[i]) == 0) {
@@ -231,51 +204,74 @@ void thankYouScreen(){
   }
 }
 
-void welcomeScreen( const char* food){
+void welcomeScreen(const char* food) {
   tft.fillScreen(HX8357_BLACK);
-  u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_BLACK); 
-  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_BLUE);      // apply Adafruit GFX color
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb35_tf);  // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
-  u8g2_for_adafruit_gfx.setCursor(100, 70);
+  u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_BLACK);
+  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_WHITE);
+
+
+  int displayW = tft.width();
+
+  // Title
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb35_tf);
+  int titleW = u8g2_for_adafruit_gfx.getUTF8Width("Välkommen!");
+  int titleX = max(0, (displayW - titleW) / 2);
+  u8g2_for_adafruit_gfx.setCursor(155, 70);
   u8g2_for_adafruit_gfx.print("Välkommen!");
-  u8g2_for_adafruit_gfx.setCursor(50, 120);
+
+  // Subtitle
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);
+  u8g2_for_adafruit_gfx.setCursor(170, 120);
   u8g2_for_adafruit_gfx.print("Dagens lunch är:");
 
-  // Split input at first comma into two parts. If no comma, display the whole string on one line.
-  const char* comma = strchr(food, ',');
-  char part1[128] = {0};
-  char part2[128] = {0};
-  if (comma) {
-    size_t len1 = comma - food;
-    if (len1 >= sizeof(part1)) len1 = sizeof(part1) - 1;
-    memcpy(part1, food, len1);
-    part1[len1] = '\0';
-    // skip comma and following whitespace
-    const char* p = comma + 1;
-    while (*p == ' ' || *p == '\t') p++;
-    strncpy(part2, p, sizeof(part2) - 1);
-    part2[sizeof(part2) - 1] = '\0';
-  } else {
-    // No comma — show whole string in part1
-    strncpy(part1, food, sizeof(part1) - 1);
-    part1[sizeof(part1) - 1] = '\0';
-  }
+  // Wrap food into max 2 lines
+  const int maxLines = 2;
+  String lines[maxLines];
+  int margin = 8;  // left/right margin
+  int availW = displayW - margin * 2;
 
+  // make sure the font used for menu measurement & rendering is set
   u8g2_for_adafruit_gfx.setFont(u8g2_font_osb21_tf);
-  // Draw first part
-  u8g2_for_adafruit_gfx.setCursor(0, 190);
-  u8g2_for_adafruit_gfx.print(part1);
-  // Draw second part if present
-  if (part2[0] != '\0') {
-    u8g2_for_adafruit_gfx.setCursor(0, 230);
-    u8g2_for_adafruit_gfx.print(part2);
-  }
+  int n = wrapTextToLines(food, availW, lines, maxLines);
 
+  // center & draw wrapped lines
+  int y0 = 190;
+  int lineHeight = 36;  // adjust to match font size
+  for (int i = 0; i < n; ++i) {
+    int w = u8g2_for_adafruit_gfx.getUTF8Width(lines[i].c_str());
+    int x = max(0, (displayW - w) / 2);
+    u8g2_for_adafruit_gfx.setCursor(x, y0 + i * lineHeight);
+    u8g2_for_adafruit_gfx.print(lines[i]);
+  }
+  // Configure appearance using method chaining
+  qrcode.setScale(3)                        // from 1 to 20
+    .setColors(HX8357_BLACK, HX8357_WHITE)  // background, foreground
+    .setRotation(QRCodeRotation::R0);       // 0°, 90°, 180°, or 270°
+
+  // Configure qrcode generation
+  qrcode.getGenerator()
+    .setErrorCorrectionLevel(QRCodeECCLevel::Medium)
+    .setVersion(7); // force specific version, the QR-code version corresponds to how much information is able to be stored. The URL in this application is long and so a slightly higher QR-code is needed than if the URL had been www.google.com
+
+  // Draw and check for errors
+  String text = "https://docs.google.com/spreadsheets/d/1A9jNZFbBt8WnfRm9xxziX8ge5XegCjXRrjOzbJCytzs/edit?gid=0#gid=0";
+
+  bool success = qrcode.draw(text, 5, 5);
+
+  if (!success) {
+    // Error generating QR code!
+    // Possible causes:
+    // - Text too long for selected version
+    // - Not enough memory
+  }
 }
 
-void getData (){
-    if (WiFi.status() == WL_CONNECTED) {
+void getData() {
+
+  if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
+    http.setTimeout(10000);        // 10 second timeout
+    http.setConnectTimeout(5000);  // 5 second connection timeout
     http.begin(serverName);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
@@ -288,11 +284,11 @@ void getData (){
         // data[0] -> dagens
         welcomeScreen(data[0].as<const char*>());
         const char* d = data[0];
-        strncpy(dagens, d, sizeof(dagens)-1);
-        dagens[sizeof(dagens)-1] = '\0'; // Ensure null termination
+        strncpy(dagens, d, sizeof(dagens) - 1);
+        dagens[sizeof(dagens) - 1] = '\0';  // Ensure null termination
         // data[2..6] -> votes[0..4]
         for (int vi = 0; vi < 5; ++vi) {
-          votes[vi] = data[vi+2].as<int>();
+          votes[vi] = data[vi + 2].as<int>();
         }
         Serial.print("Dagens updated: ");
         Serial.println(dagens);
@@ -308,40 +304,135 @@ void getData (){
   } else {
     Serial.println("WiFi not connected - skipping getData");
   }
+}
 
+// Send aggregated batch of votes as JSON array: ["YYYY-MM-DD",Hate,Dislike,Neutral,Like,Love]
+void sendBatchPost() {
+  if (batchCount <= 0) return;  // nothing to send
+  // build date string YYYY-MM-DD using system time
+  time_t now;
+  struct tm timeinfo;
+  char dateBuf[32] = { 0 };
+  time(&now);
+  localtime_r(&now, &timeinfo);
+  snprintf(dateBuf, sizeof(dateBuf), "%04d-%02d-%02d", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+
+  // Build JSON array string
+  String json = "[\"" + String(dateBuf) + "\"," + String(batchVotes[0]) + "," + String(batchVotes[1]) + 
+  "," + String(batchVotes[2]) + "," + String(batchVotes[3]) + "," + String(batchVotes[4]) + "]";
+  Serial.print("Batch JSON: ");
+  Serial.println(json);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST(json);
+    if (code > 0) {
+      Serial.print("Batch POST response: ");
+      Serial.println(code);
+      String resp = http.getString();
+      Serial.println(resp);
+    } else {
+      Serial.print("Batch POST failed: ");
+      Serial.println(code);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected - batch not sent");
+  }
+
+  // Clear batch
+  for (int i = 0; i < 5; ++i) batchVotes[i] = 0;
+  batchCount = 0;
 }
 
 void displayData() {
- tft.fillScreen(HX8357_BLACK);
- tft.setCursor(0, 0);
- u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_BLACK);
- u8g2_for_adafruit_gfx.setForegroundColor(HX8357_WHITE);
+  tft.fillScreen(HX8357_BLACK);
+  tft.setCursor(0, 0);
+  u8g2_for_adafruit_gfx.setBackgroundColor(HX8357_BLACK);
+  u8g2_for_adafruit_gfx.setForegroundColor(HX8357_WHITE);
   u8g2_for_adafruit_gfx.setFont(u8g2_font_crox3cb_tf);
- for (int i = 1; i < 7; i++) {
-   tft.drawFastHLine(0, i * 50 - 10 , 480, HX8357_WHITE);
-   u8g2_for_adafruit_gfx.setCursor(5, i*50 - 15);
-   u8g2_for_adafruit_gfx.print(300 - i*50);
- }
- for (int i = 0; i < 5; i++){
-   if(i == 1){
-   u8g2_for_adafruit_gfx.setCursor(i*90 + 30, 310);
-   u8g2_for_adafruit_gfx.print(voteLabels[i]);
-   tft.fillRect(i*90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
-   tft.drawRect(i*90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);
-   }
-   else if(i == 3){
-   u8g2_for_adafruit_gfx.setCursor(i*90 + 70, 310);
-   u8g2_for_adafruit_gfx.print(voteLabels[i]);
-   tft.fillRect(i*90 + 80, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
-   tft.drawRect(i*90 + 80, 291 - votes[i], 30, votes[i], HX8357_WHITE);
-   }
-   else{
-   u8g2_for_adafruit_gfx.setCursor(i*90 + 50 , 310);
-   u8g2_for_adafruit_gfx.print(voteLabels[i]);
-   tft.fillRect(i*90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0 , 100));
-   tft.drawRect(i*90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);   
-   }
- }
+  for (int i = 1; i < 7; i++) {
+    tft.drawFastHLine(0, i * 50 - 10, 480, HX8357_WHITE);
+    u8g2_for_adafruit_gfx.setCursor(5, i * 50 - 15);
+    u8g2_for_adafruit_gfx.print(300 - i * 50);
+  }
+  for (int i = 0; i < 5; i++) {
+    if (i == 1) {
+      u8g2_for_adafruit_gfx.setCursor(i * 90 + 30, 310);
+      u8g2_for_adafruit_gfx.print(voteLabels[i]);
+      tft.fillRect(i * 90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0, 100));
+      tft.drawRect(i * 90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);
+    } else if (i == 3) {
+      u8g2_for_adafruit_gfx.setCursor(i * 90 + 70, 310);
+      u8g2_for_adafruit_gfx.print(voteLabels[i]);
+      tft.fillRect(i * 90 + 80, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0, 100));
+      tft.drawRect(i * 90 + 80, 291 - votes[i], 30, votes[i], HX8357_WHITE);
+    } else {
+      u8g2_for_adafruit_gfx.setCursor(i * 90 + 50, 310);
+      u8g2_for_adafruit_gfx.print(voteLabels[i]);
+      tft.fillRect(i * 90 + 60, 291 - votes[i], 30, votes[i], tft.color565(i * 50, 0, 100));
+      tft.drawRect(i * 90 + 60, 291 - votes[i], 30, votes[i], HX8357_WHITE);
+    }
+  }
+  delay(3000);
 }
 
+// Wrap text into up to maxLines lines using pixel width from u8g2.
+// Returns number of lines produced (<= maxLines).
+int wrapTextToLines(const char* text, int maxWidth, String lines[], int maxLines) {
+  String s = String(text);
+  int lineCount = 0;
+  String current = "";
 
+  int pos = 0;
+  while (pos <= s.length() && lineCount < maxLines) {
+    // extract next word (space separated)
+    int next = s.indexOf(' ', pos);
+    String word;
+    if (next == -1) {
+      word = s.substring(pos);
+      pos = s.length() + 1;  // end loop
+    } else {
+      word = s.substring(pos, next);
+      pos = next + 1;
+    }
+
+    String candidate = current.length() ? (current + " " + word) : word;
+    // measure candidate width (ensure font is set on u8g2_for_adafruit_gfx before calling)
+    if (u8g2_for_adafruit_gfx.getUTF8Width(candidate.c_str()) <= maxWidth) {
+      current = candidate;
+    } else {
+      if (current.length()) {
+        lines[lineCount++] = current;
+        current = word;
+      } else {
+        // single word longer than width -> break it roughly by characters
+        String part = "";
+        for (int i = 0; i < word.length() && lineCount < maxLines; ++i) {
+          part += word[i];
+          if (u8g2_for_adafruit_gfx.getUTF8Width(part.c_str()) > maxWidth) {
+            // remove last char that overflowed
+            part.remove(part.length() - 1);
+            if (part.length()) {
+              lines[lineCount++] = part;
+            }
+            part = String(word[i]);  // start new chunk with current char
+          }
+        }
+        // leftover from broken word becomes current
+        current = part;
+      }
+    }
+
+    // final flush if at end
+    if (pos > s.length() && lineCount < maxLines && current.length()) {
+      lines[lineCount++] = current;
+      break;
+    }
+  }
+
+  return lineCount;
+}
