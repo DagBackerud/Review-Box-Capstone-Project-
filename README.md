@@ -60,7 +60,7 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
 ## Parts Used
 
 ### Electronics
-- **Microcontroller**: ESP32 (32-bit dual-core processor with WiFi)
+- **Microcontroller**: ESP32 C5 DevkitC (32-bit dual-core processor with WiFi)
 - **Display**: Adafruit HX8357 3.5" 480x320 TFT Touchscreen Display
 - **Communication**: SPI interface for display
 - **Power Supply**: USB power adapter
