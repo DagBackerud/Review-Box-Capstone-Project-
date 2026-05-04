@@ -1,87 +1,98 @@
 function doPost(e) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheets()[0];
-  var data = JSON.parse(e.postData.contents);
+  
+  var incomingData;
+  try {
+    incomingData = JSON.parse(e.postData.contents);
+  } catch (error) {
+    return ContentService.createTextOutput("Error: Invalid JSON payload.");
+  }
+
+  // Handle both a single array ["2026-10-27", 0, 5, 7, 3, 4] 
+  // and an array of arrays [["2026-10-27", ...], ["2026-10-28", ...]]
+  var votesList = [];
+  if (Array.isArray(incomingData)) {
+    if (Array.isArray(incomingData[0])) {
+      votesList = incomingData; // It's already a list of multiple dates
+    } else {
+      votesList = [incomingData]; // It's a single date, wrap it in an array
+    }
+  } else {
+    return ContentService.createTextOutput("Error: Expected an array payload.");
+  }
+
+  if (votesList.length === 0) {
+    return ContentService.createTextOutput("Success: No votes to process.");
+  }
 
   // --- Configuration ---
-  var voteMap = {
-    "HATE": 3,     // Column C
-    "DISLIKE": 4,  // Column D
-    "NEUTRAL": 5,  // Column E
-    "LIKE": 6,     // Column F
-    "LOVE": 7      // Column G
-  };
+  var startRow = 2; 
+  var lastRow = sheet.getLastRow();
   
-  var timestampColumnIndex = 2; // Column B is index 2
-  var startRow = 2;             // Start searching from the second row (assuming row 1 is headers)
-  
-  // --- Data from Payload ---
-  // TRIM the incoming string to remove any hidden whitespace
-  var incomingTimestamp = String(data.timestamp).trim(); 
-  var incomingVote = data.vote; 
-  var targetColumn = voteMap[incomingVote];
-
-  Logger.log("Incoming Payload Data: Timestamp=" + incomingTimestamp + ", Vote=" + incomingVote);
-  
-  if (!targetColumn) {
-    return ContentService.createTextOutput("Error: Invalid vote type received: " + incomingVote);
+  if (lastRow < startRow) {
+    return ContentService.createTextOutput("Error: No data rows found in the sheet.");
   }
 
-  // 1. Find the row with the matching timestamp
-  var lastRow = sheet.getLastRow();
-  var isRowUpdated = false;
+  // --- Batch Fetch Data ---
+  // Read dates (Column B)
+  var timestampRange = sheet.getRange(startRow, 2, lastRow - startRow + 1, 1);
+  var timestampValues = timestampRange.getValues();
 
-  if (lastRow >= startRow) {
-    var timestampsRange = sheet.getRange(startRow, timestampColumnIndex, lastRow - startRow + 1, 1);
-    var timestamps = timestampsRange.getValues();
+  // Read current vote counts (Columns C through G)
+  var votesRange = sheet.getRange(startRow, 3, lastRow - startRow + 1, 5);
+  var votesValues = votesRange.getValues();
 
-    for (var i = 0; i < timestamps.length; i++) {
-      var sheetValue = timestamps[i][0];
-      var sheetTimestampString = '';
+  var isDataUpdated = false;
 
-      // --- CRITICAL TIMESTAMP COMPARISON LOGIC ---
+  // --- Process Incoming Arrays in Memory ---
+  votesList.forEach(function(record) {
+    // Ensure the array has the expected 6 elements [Date, Hate, Dislike, Neutral, Like, Love]
+    if (record.length < 6) {
+      Logger.log("Skipping invalid record length: " + record);
+      return; 
+    }
 
-        // If it's not a Date (e.g., plain text), convert to string and TRIM for safety
-        sheetTimestampString = String(sheetValue).trim();
+    var incomingDate = String(record[0]).trim();
+    var incomingHate = parseInt(record[1]) || 0;
+    var incomingDislike = parseInt(record[2]) || 0;
+    var incomingNeutral = parseInt(record[3]) || 0;
+    var incomingLike = parseInt(record[4]) || 0;
+    var incomingLove = parseInt(record[5]) || 0;
+
+    // Search for the matching date in the fetched array
+    for (var i = 0; i < timestampValues.length; i++) {
+      var sheetDateVal = timestampValues[i][0];
+      var sheetDateString = "";
+
+      // Safely convert Google Sheets Date objects to YYYY-MM-DD strings
+      if (sheetDateVal instanceof Date) {
+        sheetDateString = Utilities.formatDate(sheetDateVal, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+      } else {
+        sheetDateString = String(sheetDateVal).trim();
+      }
+
+      if (sheetDateString === incomingDate) {
+        // Add the incoming votes to the existing tallies in memory
+        votesValues[i][0] = (parseInt(votesValues[i][0]) || 0) + incomingHate;    // Column C
+        votesValues[i][1] = (parseInt(votesValues[i][1]) || 0) + incomingDislike; // Column D
+        votesValues[i][2] = (parseInt(votesValues[i][2]) || 0) + incomingNeutral; // Column E
+        votesValues[i][3] = (parseInt(votesValues[i][3]) || 0) + incomingLike;    // Column F
+        votesValues[i][4] = (parseInt(votesValues[i][4]) || 0) + incomingLove;    // Column G
         
-      // Compare the formatted sheet string with the incoming payload string
-      Logger.log("Row " + (i + startRow) + ": Comparing Sheet value: '" + sheetTimestampString + "' to Incoming value: '" + incomingTimestamp + "'");
-      var logCell = sheet.getRange("H1");
-      logCell.setValue("Row " + (i + startRow) + ": Comparing Sheet value: '" + sheetTimestampString + "' to Incoming value: '" + incomingTimestamp + "'")
-
-
-
-      if (sheetTimestampString === incomingTimestamp) {
-        var rowToUpdate = i + startRow; 
-        
-        // 2. Update the vote count
-        var targetCell = sheet.getRange(rowToUpdate, targetColumn);
-        var currentCount = targetCell.getValue();
-        
-        // Increment count, defaulting to 1 if the cell is empty or non-numeric
-        var newCount = (typeof currentCount === 'number' && !isNaN(currentCount)) ? currentCount + 1 : 1;
-
-        targetCell.setValue(newCount);
-
-        isRowUpdated = true;
-        Logger.log("SUCCESS: Row " + rowToUpdate + " updated in column " + targetColumn);
-        break; // Exit the loop once the row is found and updated
+        isDataUpdated = true;
+        break; // Stop searching once the matching date is found
       }
     }
+  });
+
+  // --- Batch Write Data ---
+  if (isDataUpdated) {
+    votesRange.setValues(votesValues);
+    return ContentService.createTextOutput("Success: Vote arrays processed and added to sheet.");
+  } else {
+    return ContentService.createTextOutput("Success: Payload received, but no matching dates were found.");
   }
-
-  // 3. Fallback: If no matching row was found, append a new row
-  if (!isRowUpdated) {
-     var newRowVotes = [0, 0, 0, 0, 0]; 
-     newRowVotes[targetColumn - 3] = 1; 
-     
-     // The columns appended are: Date, Timestamp, HATE, DISLIKE, NEUTRAL, LIKE, LOVE
-     sheet.appendRow([new Date(), incomingTimestamp].concat(newRowVotes));
-     Logger.log("APPENDED: No matching row found. Appended new row for timestamp: " + incomingTimestamp);
-     return ContentService.createTextOutput("Data appended as no existing row was found");
-  } 
-
-  return ContentService.createTextOutput("Vote incremented successfully");
 }
 
 function doGet() {
