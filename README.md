@@ -66,6 +66,7 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
 - **Power Supply**: USB power adapter
 
 ### Input Controls
+- STEMMA Wired Push-Buttons
 - **5 Buttons**: Connected to GPIO pins (25, 7, 26, 1, 0) for voting input
 - **Button Labels**: HATE, DISLIKE, NEUTRAL, LIKE, LOVE
 
