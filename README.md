@@ -60,7 +60,8 @@ First begin by creating a new google sheet and naming it whatever you want.
 <img width="1440" height="816" alt="Image" src="https://github.com/user-attachments/assets/dc37257e-dfad-4b48-aedd-c270ce8f77a5" />
 
 Then paste the first row from the existing sheet into your sheet.
-
+<img width="762" height="360" alt="Image" src="https://github.com/user-attachments/assets/189ab9cc-f8ad-46fe-8a87-5271486c9378" />
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/875cfdf6-71eb-4f8f-8354-ca647763a5b8" />
 Select column B and then click “Format” followed by “Numbers” and select “Normal Text.
 This step makes sure that the dates are in the correct format.
 
