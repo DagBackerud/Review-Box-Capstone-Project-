@@ -54,9 +54,51 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
    - Select the correct board (ESP32 Dev Module) and port
    - Click Upload
 
-5. **Configure Google Sheet**
-   - Follow the setup instructions: https://docs.google.com/document/d/1egwhYvs6kNeSyEP7dpBwt4Gf0NozoCYfEVu8HTmKg3k/edit?usp=sharing
-   - Deploy the Google Apps Script code (included in the repository)
+5. **Setting up the Google Sheet**
+
+First begin by creating a new google sheet and naming it whatever you want.
+<img width="1440" height="816" alt="Image" src="https://github.com/user-attachments/assets/dc37257e-dfad-4b48-aedd-c270ce8f77a5" />
+
+Then paste the first row from the existing sheet into your sheet.
+
+Select column B and then click “Format” followed by “Numbers” and select “Normal Text.
+This step makes sure that the dates are in the correct format.
+
+
+
+Write the dates and the corresponding food into Column B and  A, respectively.
+
+Click “Tillägg” and then Google Apps Script.
+
+And then paste the whole code into the function.
+
+
+Click “Implement” and then “New Implementation” 
+Select webbapp as the type of function you are implementing.
+
+
+Select “all” for people who can access the function. This allows the microcontroller to communicate with the script.
+
+
+Approve the function to make necessary changes. And finally copy the webbapp URL into the “credentials.h” file and upload the code to the ESP32-C5. 
+
+ 
+Updating the sheet for a new semester
+If you want to have different sheets for different semesters, simply click the + in the bottom left corner and paste the first row into the new sheet.
+
+
+
+
+
+Finally move the sheet so that it is the first in order.
+
+The script will now update the vote counts in this new sheet.
+
+
+
+
+
+
 
 ## Parts Used
 
