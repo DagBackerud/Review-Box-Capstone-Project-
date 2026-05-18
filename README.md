@@ -56,44 +56,47 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
 
 5. **Setting up the Google Sheet**
 
-First begin by creating a new google sheet and naming it whatever you want.
+   -First begin by creating a new google sheet and naming it whatever you want.
 <img width="1440" height="816" alt="Image" src="https://github.com/user-attachments/assets/dc37257e-dfad-4b48-aedd-c270ce8f77a5" />
 
-Then paste the first row from the existing sheet into your sheet.
+   -Then paste the first row from the existing sheet into your sheet.
 <img width="762" height="360" alt="Image" src="https://github.com/user-attachments/assets/189ab9cc-f8ad-46fe-8a87-5271486c9378" />
 <img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/875cfdf6-71eb-4f8f-8354-ca647763a5b8" />
-Select column B and then click “Format” followed by “Numbers” and select “Normal Text.
-This step makes sure that the dates are in the correct format.
+   -Select column B and then click “Format” followed by “Numbers” and select “Normal Text.
+    This step makes sure that the dates are in the correct format.
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/a79e9af8-5d42-4da1-9eef-018d06bf2630" />
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/eb15a131-dda4-48d1-a7c0-583a4087df37" />
 
 
+   -Write the dates and the corresponding food into Column B and  A, respectively.
+<img width="492" height="272" alt="Image" src="https://github.com/user-attachments/assets/612b8bc5-d864-4aba-955e-75e29f8a5691" />
 
-Write the dates and the corresponding food into Column B and  A, respectively.
-
-Click “Tillägg” and then Google Apps Script.
-
-And then paste the whole code into the function.
-
-
-Click “Implement” and then “New Implementation” 
-Select webbapp as the type of function you are implementing.
+   -Click “Tillägg” and then Google Apps Script.
+<img width="1047" height="266" alt="Image" src="https://github.com/user-attachments/assets/95a973af-3333-4890-bf26-5886cf4da46c" />
+   -And then paste the whole code into the function.
+<img width="1376" height="812" alt="Image" src="https://github.com/user-attachments/assets/14e44d97-0fa7-48fe-9750-9e24e65b35a9" />
 
 
-Select “all” for people who can access the function. This allows the microcontroller to communicate with the script.
+   -Click “Implement” and then “New Implementation” 
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/0c2aaca8-76e8-43e2-adbd-342b2c82834e" />
 
+   -Select webbapp as the type of function you are implementing.
+<img width="830" height="640" alt="Image" src="https://github.com/user-attachments/assets/e53b9c4f-c423-4166-929f-6c6431019394" />
+   
+   -Select “all” for people who can access the function. This allows the microcontroller to communicate with the script.
+<img width="764" height="600" alt="Image" src="https://github.com/user-attachments/assets/f91ef6f5-4a3d-4a52-badc-47945a845777" />
 
-Approve the function to make necessary changes. And finally copy the webbapp URL into the “credentials.h” file and upload the code to the ESP32-C5. 
+   -Approve the function to make necessary changes. And finally copy the webbapp URL into the “credentials.h” file and upload the code      to the ESP32-C5.   
 
  
-Updating the sheet for a new semester
-If you want to have different sheets for different semesters, simply click the + in the bottom left corner and paste the first row into the new sheet.
+   6.**Updating the sheet for a new semester**
+   -If you want to have different sheets for different semesters, simply click the + in the bottom left corner and paste the first row      into the new sheet.
+<img width="1440" height="900" alt="Image" src="https://github.com/user-attachments/assets/20289441-6dfa-4cef-8608-edadaa32d70a" />
+<img width="745" height="769" alt="Image" src="https://github.com/user-attachments/assets/94127cd6-113a-4c7f-a212-652eca89e5b5" />
 
-
-
-
-
-Finally move the sheet so that it is the first in order.
-
-The script will now update the vote counts in this new sheet.
+   -Finally move the sheet so that it is the first in order.
+<img width="745" height="769" alt="Image" src="https://github.com/user-attachments/assets/cdaaee51-c19d-4f91-b5bc-029512273b0b" />
+   -The script will now update the vote counts in this new sheet.
 
 
 
