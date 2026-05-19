@@ -53,8 +53,14 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
    - Open `main` file in Arduino IDE
    - Select the correct board (ESP32 Dev Module) and port
    - Click Upload
+5. **Mounting the support**
+   -Mount the support component to the pillar.
+   -Then fasten it with hose clamps.
+<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-a1bebe6b-7fff-da85-c93a-c8d9cb044214"><div dir="ltr" style="margin-left:0pt;" align="left">
+<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-72005faf-7fff-63d8-4efd-94f2e5c7ea4b"><div dir="ltr" style="margin-left:0pt;" align="left">
 
-5. **Setting up the Google Sheet**
+
+7. **Setting up the Google Sheet**
 
    -First begin by creating a new google sheet and naming it whatever you want.
 <img width="1440" height="816" alt="Image" src="https://github.com/user-attachments/assets/dc37257e-dfad-4b48-aedd-c270ce8f77a5" />
