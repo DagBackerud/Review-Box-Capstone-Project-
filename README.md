@@ -64,9 +64,11 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
   -Place the review box on top of the support component.
   
   -Begin screwing until both units are fitted tightly.
+  
 <img width="311" height="418" alt="Image" src="https://github.com/user-attachments/assets/5faa7b4b-50c9-4a2f-b34b-be60aa536bd0" />
 
   -Place the hose clamps attached to the review box around the pillar and fasten them.
+  
 <img width="255" height="344" alt="Image" src="https://github.com/user-attachments/assets/e455c1d2-64e6-408b-b4ee-22edd5e58a04" />
 
   -Connect the USB-C cable used for power to the microcontroller.
