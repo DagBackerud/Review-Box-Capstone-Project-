@@ -56,6 +56,7 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
 5. **Mounting the support**
    
    -Mount the support component to the pillar.
+   
    -Then fasten it with hose clamps.
 
 
