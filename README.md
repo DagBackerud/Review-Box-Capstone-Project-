@@ -139,4 +139,4 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
 
 **Project Team**: Dag & Simba  
 **Class**: TE23TE  
-**School**: [Swedish Gymnasium]
+**School**: Pauliskolan, Malmö
