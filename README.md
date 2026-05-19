@@ -58,7 +58,8 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
    -Mount the support component to the pillar.
    
    -Then fasten it with hose clamps.
-   <img width="285" height="380" alt="Image" src="https://github.com/user-attachments/assets/ef69afe3-cb60-4dc6-8234-91fcc44e5832" />
+<img width="284" height="378" alt="Image" src="https://github.com/user-attachments/assets/84e3c496-7039-4700-b1bf-875d8d656565" />
+<img width="285" height="380" alt="Image" src="https://github.com/user-attachments/assets/ef69afe3-cb60-4dc6-8234-91fcc44e5832" />
 
   -Place the review box on top of the support component.
   
