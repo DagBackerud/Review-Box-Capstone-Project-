@@ -58,10 +58,24 @@ See this link for instructions on setting up your Google Sheet: https://docs.goo
    -Mount the support component to the pillar.
    
    -Then fasten it with hose clamps.
+<img width="558" height="163" alt="Image" src="https://github.com/user-attachments/assets/01d3de67-b58d-4f3d-86ea-3ecebff235cc" />
 
+<img width="285" height="380" alt="Image" src="https://github.com/user-attachments/assets/ef69afe3-cb60-4dc6-8234-91fcc44e5832" />
 
+  -Place the review box on top of the support component.
+  
+  -Begin screwing until both units are fitted tightly.
+<img width="311" height="418" alt="Image" src="https://github.com/user-attachments/assets/5faa7b4b-50c9-4a2f-b34b-be60aa536bd0" />
 
-7. **Setting up the Google Sheet**
+  -Place the hose clamps attached to the review box around the pillar and fasten them.
+<img width="255" height="344" alt="Image" src="https://github.com/user-attachments/assets/e455c1d2-64e6-408b-b4ee-22edd5e58a04" />
+
+  -Connect the USB-C cable used for power to the microcontroller.
+
+  -Place the lid on top of the review box and screw it into the brass inserts.
+<img width="483" height="588" alt="Image" src="https://github.com/user-attachments/assets/8281c323-8130-4ce3-932f-e09ba2b0a41a" />
+
+6. **Setting up the Google Sheet**
 
    -First begin by creating a new google sheet and naming it whatever you want.
 <img width="1440" height="816" alt="Image" src="https://github.com/user-attachments/assets/dc37257e-dfad-4b48-aedd-c270ce8f77a5" />
